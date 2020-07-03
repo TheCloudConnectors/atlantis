@@ -21,10 +21,15 @@ type Router struct {
 	// AtlantisURL is the fully qualified URL that Atlantis is
 	// accessible from externally.
 	AtlantisURL *url.URL
+	// DisableUserInterface tells if the web user interface has been deactivated
+	DisableUserInterface bool
 }
 
 // GenerateLockURL returns a fully qualified URL to view the lock at lockID.
 func (r *Router) GenerateLockURL(lockID string) string {
+	if r.DisableUserInterface {
+		return ""
+	}
 	lockURL, _ := r.Underlying.Get(r.LockViewRouteName).URL(r.LockViewRouteIDQueryParam, url.QueryEscape(lockID))
 	// At this point, lockURL will just be a path because r.Underlying isn't
 	// configured with host or scheme information. So to generate the fully
