@@ -66,22 +66,23 @@ const (
 
 // Server runs the Atlantis web server.
 type Server struct {
-	AtlantisVersion     string
-	AtlantisURL         *url.URL
-	Router              *mux.Router
-	Port                int
-	CommandRunner       *events.DefaultCommandRunner
-	Logger              *logging.SimpleLogger
-	Locker              locking.Locker
-	EventsController    *EventsController
-	GithubAppController *GithubAppController
-	LocksController     *LocksController
-	StatusController    *StatusController
-	IndexTemplate       TemplateWriter
-	LockDetailTemplate  TemplateWriter
-	SSLCertFile         string
-	SSLKeyFile          string
-	Drainer             *events.Drainer
+	AtlantisVersion      string
+	AtlantisURL          *url.URL
+	Router               *mux.Router
+	Port                 int
+	CommandRunner        *events.DefaultCommandRunner
+	Logger               *logging.SimpleLogger
+	Locker               locking.Locker
+	EventsController     *EventsController
+	GithubAppController  *GithubAppController
+	LocksController      *LocksController
+	StatusController     *StatusController
+	IndexTemplate        TemplateWriter
+	LockDetailTemplate   TemplateWriter
+	SSLCertFile          string
+	SSLKeyFile           string
+	Drainer              *events.Drainer
+	DisableUserInterface bool
 }
 
 // Config holds config for server that isn't passed in by the user.
@@ -252,6 +253,7 @@ func NewServer(userConfig UserConfig, config Config) (*Server, error) {
 		GitlabSupportsCommonMark: gitlabClient.SupportsCommonMark(),
 		DisableApplyAll:          userConfig.DisableApplyAll,
 		DisableMarkdownFolding:   userConfig.DisableMarkdownFolding,
+		DisableUserInterface:     userConfig.DisableUserInterface,
 	}
 
 	boltdb, err := db.New(userConfig.DataDir)
@@ -312,6 +314,7 @@ func NewServer(userConfig UserConfig, config Config) (*Server, error) {
 	underlyingRouter := mux.NewRouter()
 	router := &Router{
 		AtlantisURL:               parsedURL,
+		DisableUserInterface:      userConfig.DisableUserInterface,
 		LockViewRouteIDQueryParam: LockViewRouteIDQueryParam,
 		LockViewRouteName:         LockViewRouteName,
 		Underlying:                underlyingRouter,
@@ -457,39 +460,43 @@ func NewServer(userConfig UserConfig, config Config) (*Server, error) {
 	}
 
 	return &Server{
-		AtlantisVersion:     config.AtlantisVersion,
-		AtlantisURL:         parsedURL,
-		Router:              underlyingRouter,
-		Port:                userConfig.Port,
-		CommandRunner:       commandRunner,
-		Logger:              logger,
-		Locker:              lockingClient,
-		EventsController:    eventsController,
-		GithubAppController: githubAppController,
-		LocksController:     locksController,
-		StatusController:    statusController,
-		IndexTemplate:       indexTemplate,
-		LockDetailTemplate:  lockTemplate,
-		SSLKeyFile:          userConfig.SSLKeyFile,
-		SSLCertFile:         userConfig.SSLCertFile,
-		Drainer:             drainer,
+		AtlantisVersion:      config.AtlantisVersion,
+		AtlantisURL:          parsedURL,
+		Router:               underlyingRouter,
+		Port:                 userConfig.Port,
+		CommandRunner:        commandRunner,
+		Logger:               logger,
+		Locker:               lockingClient,
+		EventsController:     eventsController,
+		GithubAppController:  githubAppController,
+		LocksController:      locksController,
+		StatusController:     statusController,
+		IndexTemplate:        indexTemplate,
+		LockDetailTemplate:   lockTemplate,
+		SSLKeyFile:           userConfig.SSLKeyFile,
+		SSLCertFile:          userConfig.SSLCertFile,
+		DisableUserInterface: userConfig.DisableUserInterface,
+		Drainer:              drainer,
 	}, nil
 }
 
 // Start creates the routes and starts serving traffic.
 func (s *Server) Start() error {
-	s.Router.HandleFunc("/", s.Index).Methods("GET").MatcherFunc(func(r *http.Request, rm *mux.RouteMatch) bool {
-		return r.URL.Path == "/" || r.URL.Path == "/index.html"
-	})
-	s.Router.HandleFunc("/healthz", s.Healthz).Methods("GET")
-	s.Router.HandleFunc("/status", s.StatusController.Get).Methods("GET")
-	s.Router.PathPrefix("/static/").Handler(http.FileServer(&assetfs.AssetFS{Asset: static.Asset, AssetDir: static.AssetDir, AssetInfo: static.AssetInfo}))
 	s.Router.HandleFunc("/events", s.EventsController.Post).Methods("POST")
-	s.Router.HandleFunc("/github-app/exchange-code", s.GithubAppController.ExchangeCode).Methods("GET")
-	s.Router.HandleFunc("/github-app/setup", s.GithubAppController.New).Methods("GET")
-	s.Router.HandleFunc("/locks", s.LocksController.DeleteLock).Methods("DELETE").Queries("id", "{id:.*}")
-	s.Router.HandleFunc("/lock", s.LocksController.GetLock).Methods("GET").
-		Queries(LockViewRouteIDQueryParam, fmt.Sprintf("{%s}", LockViewRouteIDQueryParam)).Name(LockViewRouteName)
+
+	if !s.DisableUserInterface {
+		s.Router.HandleFunc("/", s.Index).Methods("GET").MatcherFunc(func(r *http.Request, rm *mux.RouteMatch) bool {
+			return r.URL.Path == "/" || r.URL.Path == "/index.html"
+		})
+		s.Router.HandleFunc("/healthz", s.Healthz).Methods("GET")
+		s.Router.HandleFunc("/status", s.StatusController.Get).Methods("GET")
+		s.Router.PathPrefix("/static/").Handler(http.FileServer(&assetfs.AssetFS{Asset: static.Asset, AssetDir: static.AssetDir, AssetInfo: static.AssetInfo}))
+		s.Router.HandleFunc("/github-app/exchange-code", s.GithubAppController.ExchangeCode).Methods("GET")
+		s.Router.HandleFunc("/github-app/setup", s.GithubAppController.New).Methods("GET")
+		s.Router.HandleFunc("/locks", s.LocksController.DeleteLock).Methods("DELETE").Queries("id", "{id:.*}")
+		s.Router.HandleFunc("/lock", s.LocksController.GetLock).Methods("GET").Queries(LockViewRouteIDQueryParam, fmt.Sprintf("{%s}", LockViewRouteIDQueryParam)).Name(LockViewRouteName)
+	}
+
 	n := negroni.New(&negroni.Recovery{
 		Logger:     log.New(os.Stdout, "", log.LstdFlags),
 		PrintStack: false,

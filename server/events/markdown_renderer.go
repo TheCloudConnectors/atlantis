@@ -39,15 +39,17 @@ type MarkdownRenderer struct {
 	GitlabSupportsCommonMark bool
 	DisableApplyAll          bool
 	DisableMarkdownFolding   bool
+	DisableUserInterface     bool
 }
 
 // commonData is data that all responses have.
 type commonData struct {
-	Command         string
-	Verbose         bool
-	Log             string
-	PlansDeleted    bool
-	DisableApplyAll bool
+	Command              string
+	Verbose              bool
+	Log                  string
+	PlansDeleted         bool
+	DisableApplyAll      bool
+	DisableUserInterface bool
 }
 
 // errData is data about an error response.
@@ -70,7 +72,8 @@ type resultData struct {
 
 type planSuccessData struct {
 	models.PlanSuccess
-	PlanWasDeleted bool
+	PlanWasDeleted       bool
+	DisableUserInterface bool
 }
 
 type projectResultTmplData struct {
@@ -85,11 +88,12 @@ type projectResultTmplData struct {
 func (m *MarkdownRenderer) Render(res CommandResult, cmdName models.CommandName, log string, verbose bool, vcsHost models.VCSHostType) string {
 	commandStr := strings.Title(cmdName.String())
 	common := commonData{
-		Command:         commandStr,
-		Verbose:         verbose,
-		Log:             log,
-		PlansDeleted:    res.PlansDeleted,
-		DisableApplyAll: m.DisableApplyAll,
+		Command:              commandStr,
+		Verbose:              verbose,
+		Log:                  log,
+		PlansDeleted:         res.PlansDeleted,
+		DisableApplyAll:      m.DisableApplyAll,
+		DisableUserInterface: m.DisableUserInterface,
 	}
 	if res.Error != nil {
 		return m.renderTemplate(unwrappedErrWithLogTmpl, errData{res.Error.Error(), common})
@@ -132,9 +136,9 @@ func (m *MarkdownRenderer) renderProjectResults(results []models.ProjectResult, 
 			})
 		} else if result.PlanSuccess != nil {
 			if m.shouldUseWrappedTmpl(vcsHost, result.PlanSuccess.TerraformOutput) {
-				resultData.Rendered = m.renderTemplate(planSuccessWrappedTmpl, planSuccessData{PlanSuccess: *result.PlanSuccess, PlanWasDeleted: common.PlansDeleted})
+				resultData.Rendered = m.renderTemplate(planSuccessWrappedTmpl, planSuccessData{PlanSuccess: *result.PlanSuccess, PlanWasDeleted: common.PlansDeleted, DisableUserInterface: common.DisableUserInterface})
 			} else {
-				resultData.Rendered = m.renderTemplate(planSuccessUnwrappedTmpl, planSuccessData{PlanSuccess: *result.PlanSuccess, PlanWasDeleted: common.PlansDeleted})
+				resultData.Rendered = m.renderTemplate(planSuccessUnwrappedTmpl, planSuccessData{PlanSuccess: *result.PlanSuccess, PlanWasDeleted: common.PlansDeleted, DisableUserInterface: common.DisableUserInterface})
 			}
 			numPlanSuccesses++
 		} else if result.ApplySuccess != "" {
@@ -253,7 +257,12 @@ var planSuccessWrappedTmpl = template.Must(template.New("").Parse(
 // to do next.
 var planNextSteps = "{{ if .PlanWasDeleted }}This plan was not saved because one or more projects failed and automerge requires all plans pass.{{ else }}* :arrow_forward: To **apply** this plan, comment:\n" +
 	"    * `{{.ApplyCmd}}`\n" +
+	"{{ if .DisableUserInterface }}" +
+	"* :put_litter_in_its_place: To delete all plans and locks for the PR, comment:\n" +
+	"    * `atlantis unlock`\n" +
+	"{{ else }}" +
 	"* :put_litter_in_its_place: To **delete** this plan click [here]({{.LockURL}})\n" +
+	"{{end}}" +
 	"* :repeat: To **plan** this project again, comment:\n" +
 	"    * `{{.RePlanCmd}}`{{end}}"
 var applyUnwrappedSuccessTmpl = template.Must(template.New("").Parse(

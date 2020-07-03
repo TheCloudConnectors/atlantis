@@ -54,6 +54,7 @@ const (
 	DefaultTFVersionFlag       = "default-tf-version"
 	DisableApplyAllFlag        = "disable-apply-all"
 	DisableMarkdownFoldingFlag = "disable-markdown-folding"
+	DisableUserInterface       = "disable-ui"
 	GHHostnameFlag             = "gh-hostname"
 	GHTokenFlag                = "gh-token"
 	GHUserFlag                 = "gh-user"
@@ -264,6 +265,10 @@ var boolFlags = map[string]boolFlag{
 	},
 	DisableApplyAllFlag: {
 		description:  "Disable \"atlantis apply\" command so a specific project/workspace/directory has to be specified for applies.",
+		defaultValue: false,
+	},
+	DisableUserInterface: {
+		description:  "Disable the web user interface. Only interactions made through pull requests are allowed.",
 		defaultValue: false,
 	},
 	AllowDraftPRs: {

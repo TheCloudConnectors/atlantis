@@ -24,6 +24,7 @@ type UserConfig struct {
 	DataDir                    string `mapstructure:"data-dir"`
 	DisableApplyAll            bool   `mapstructure:"disable-apply-all"`
 	DisableMarkdownFolding     bool   `mapstructure:"disable-markdown-folding"`
+	DisableUserInterface       bool   `mapstructure:"disable-ui"`
 	GithubHostname             string `mapstructure:"gh-hostname"`
 	GithubToken                string `mapstructure:"gh-token"`
 	GithubUser                 string `mapstructure:"gh-user"`
